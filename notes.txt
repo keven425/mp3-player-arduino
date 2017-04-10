@@ -1,0 +1,7 @@
+http://blog.tkjelectronics.dk/2012/09/a-practical-approach-to-kalman-filter-and-how-to-implement-it/
+https://diyhacking.com/arduino-mpu-6050-imu-sensor-tutorial/
+https://github.com/TKJElectronics/Example-Sketch-for-IMU-including-Kalman-filter
+http://www.olliw.eu/2013/imu-data-fusing/
+heart rate monitor: https://forum.arduino.cc/index.php?topic=155997.0
+
+FFT library: https://github.com/kosme/arduinoFFT
