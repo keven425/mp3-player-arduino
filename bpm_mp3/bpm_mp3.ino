@@ -15,6 +15,16 @@ const int EVENT_2 = 2;
 
 EventManager eventManager;
 
+//Defines a custom structure StateMachineSingle (data type), with one state
+struct StateMachineSingle
+{
+  enum State { UNDEFINED, STATE_ONE }; //One state + an (optional) undefined state
+  int currentState = UNDEFINED; //The default is undefined
+  void (* listener)(int event, int parameter); //Function pointer that can point to our callback
+};
+//Create an "alias" [StateMachineSingle] to [struct StateMachineSingle] (better syntax)
+typedef struct StateMachineSingle StateMachineSingle; 
+
 //Defines a custom structure StateMachineDuo (data type), with two states
 struct StateMachineDuo
 {
@@ -37,8 +47,8 @@ typedef struct StateMachineTrio StateMachineTrio;
 
 //Create three variables representing state machines, using our custom data types.
 //Note that we are using the StateMachineTrio data type twice. (this is the benefit of the struct)
-StateMachineDuo player;
-StateMachineDuo bpm_controller;
+StateMachineDuo player; // states: [PLAYING, STOPPED]
+StateMachineDuo bpm_controller; // states: [MANUAL, AUTO]
 
 void setup() {
   Serial.begin(115200);
@@ -50,15 +60,16 @@ void setup() {
 
   //Map the different events to the listeners
   //Note that the toggle state machine is only listening to two events
-  eventManager.addListener(EVENT_BTN_PLAY, player.listener); // start
-  eventManager.addListener(EVENT_BTN_STOP, player.listener); // pause
+  eventManager.addListener(EVENT_BTN_PLAY_PAUSE, player.listener); // start/pause
   eventManager.addListener(EVENT_BTN_NEXT, player.listener); // next
   eventManager.addListener(EVENT_BTN_PREV, player.listener); // prev
+  eventManager.addListener(EVENT_BTN_FAV, player.listener); // favorite song
   eventManager.addListener(EVENT_DIAL_UP, player.listener); // volume up
   eventManager.addListener(EVENT_DIAL_DOWN, player.listener); // volume down
-  eventManager.addListener(EVENT_BTN_FAV, player.listener); // volume down
+  eventManager.addListener(EVENT_SET_BPM, player.listener); // set BPM
 
-  eventManager.addListener(EVENT_SLIDER_MOVE, bpm_controller.listener); // bpm
+  eventManager.addListener(EVENT_SLIDER_MOVE, bpm_controller.listener); // bpm slider moved
+  eventManager.addListener(EVENT_BPM, bpm_controller.listener); // bpm periodically from IMU
   
   Serial.println();
   Serial.println("--------------------------------");
@@ -76,32 +87,11 @@ void loop() {
   //Handle any events that are in the queue
   eventManager.processEvent();
 
+  // poll sensors, post events
+  // TODO
+  
   //Post events
-
-  Serial.print("------------ [");
-  Serial.print(index);
-  Serial.println("] ------------");
-
-  switch (index)
-  {
-    case 0:
-      eventManager.queueEvent(EVENT_0, 0); 
-      break;
-
-    case 1:
-      eventManager.queueEvent(EVENT_1, 0); 
-      break;
-
-    case 2:
-      eventManager.queueEvent(EVENT_2, 0); 
-      break;
-  }
-
-  //Cycle through { 0, 1, 2 }
-  index = (index + 1) % 3;
-
-  //Wait two seconds 
-  delay(2000);
+  // eventManager.queueEvent(EVENT_0, 0); 
 
 }
 
