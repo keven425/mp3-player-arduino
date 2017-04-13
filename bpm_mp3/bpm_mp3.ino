@@ -89,12 +89,15 @@ void loop() {
 
   // poll sensors, post events
   // TODO
-  
+
   //Post events
   // eventManager.queueEvent(EVENT_0, 0); 
 
 }
 
+// ************************
+// * The following needs to be changed
+// ************************
 void onPlay( int event, int param )
 {
   Serial.print("onToggle(   ");
