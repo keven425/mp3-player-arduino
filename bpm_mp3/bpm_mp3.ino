@@ -4,7 +4,7 @@
  */
 
 #include <Wire.h>
-#include "libraries/EventManager/EventManager.h"
+#include "EventManager.h"
 //#include <EventManager.h>
 
 // pins
