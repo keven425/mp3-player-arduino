@@ -74,6 +74,14 @@ public:
      */
     void setTrack(uint16_t track);
 
+    /**************************************************************** 
+     * Function Name: SpecifyfolderPlay
+     * Description: Specify the music index in the folder to play, the index is decided by the input sequence of the music.
+     * Parameters: folder: folder name, must be number;  index: the music index.
+     * Return: none
+    ****************************************************************/ 
+    void setFolder(uint16_t folder);
+
     /**
      * Method: pause()
      * -----------------

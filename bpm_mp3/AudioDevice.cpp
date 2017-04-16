@@ -165,6 +165,21 @@ uint16_t AudioDevice::previous() {
     return retVal;
 }
 
+void AudioDevice::setFolder(uint16_t folder)
+{
+    // mp3.write(0x7E);
+    // mp3.write(0xFF);
+    // mp3.write(0x06);
+    // mp3.write(0x0F);
+    // mp3.write(uint8_t(0x00));
+    // mp3.write(uint8_t(folder));
+    // mp3.write(uint8_t(index));
+    // mp3.write(0xEF);
+    // delay(10);
+    char data[] = {0x0F, 0x00, folder, 0x01, 0xEF};
+    mp3AWrite(6, &data[0], 10);
+}
+
 void AudioDevice::setTrack(uint16_t track) {
     switch (_mode) {
         case fm: {
@@ -172,7 +187,9 @@ void AudioDevice::setTrack(uint16_t track) {
             break;
         }
         case mp3a: {
-            char data[] = {0x03, 0x00, track / 0xFF, track % 0xFF};
+            uint8_t track_msb = track / 0xFF;
+            uint8_t track_lsb = track % 0xFF;
+            char data[] = {0x03, 0x00, track_msb, track_lsb};
             mp3AWrite(6, &data[0], 10);
             break;
         }
