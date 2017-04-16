@@ -6,73 +6,42 @@
 #include <Wire.h>
 #include "EventManager.h"
 #include "AudioDevice.h"
-// #include "Imu2Bpm.h"
+#include "Imu2Bpm.h"
 
 // constants
-const int DEBOUNCE_DELAY = 50; // 50 millisec
-const int BPM_MIN = 140;
-const int BPM_MAX = 180;
-const int BPM_STEP = 10;
+const uint16_t DEBOUNCE_DELAY = 50; // 50 millisec
+const uint16_t BPM_MIN = 120;
+const uint16_t BPM_MAX = 180;
+const uint16_t BPM_STEP = 20;
+const uint16_t DEBOUNCE_BPM_DELAY = 3000; // 3 seconds
 
 // pins
-const int PIN_BTN_PLAY_PAUSE = 2;
-const int PIN_BTN_PREV = 3;
-const int PIN_BTN_NEXT = 4;
-const int PIN_MP3_TX = 6;
-const int PIN_MP3_RX = 7;
-const int PIN_SLIDER = A0; // sliding potentiometer
-const int PIN_DIAL = A1;
+const uint8_t PIN_BTN_PLAY_PAUSE = 2;
+const uint8_t PIN_BTN_PREV = 3;
+const uint8_t PIN_BTN_NEXT = 4;
+const uint8_t PIN_MP3_TX = 6;
+const uint8_t PIN_MP3_RX = 7;
+const uint8_t PIN_SLIDER = A0; // sliding potentiometer
+const uint8_t PIN_DIAL = A1;
 
-const int ROTARY_ANGLE_SENSOR = A0;
-const float ADC_REF = 3.3; //reference voltage of ADC is 5v.If the Vcc switch on the seeeduino
-                 //board switches to 3V3, the ADC_REF should be 3.3
-const float GROVE_VCC = 3.3; //VCC of the grove interface is normally 5v
-const int FULL_ANGLE = 300; //full value of the rotary angle is 300 degrees
+const uint8_t ROTARY_ANGLE_SENSOR = A0;
+const uint16_t FULL_ANGLE = 300; //full value of the rotary angle is 300 degrees
 
-const int EVENT_BTN_PLAY_PAUSE_DOWN = 0; // start/pause
-const int EVENT_BTN_NEXT_DOWN = 1; // next
-const int EVENT_BTN_PREV_DOWN = 2; // prev
-const int EVENT_SET_BPM = 3; // set BPM
-const int EVENT_DIAL_CHANGE = 4; // volume change
-const int EVENT_SLIDER_CHANGE = 5; // bpm slider moved
-const int EVENT_BPM = 6; // bpm periodically from IMU
-const int EVENT_BTN_PLAY_PAUSE = 7; // button high/low events
-const int EVENT_BTN_PREV = 8; // button high/low events
-const int EVENT_BTN_NEXT = 9; // button high/low events
-const int EVENT_SLIDER = 10;
-const int EVENT_DIAL = 11;
+const uint8_t EVENT_BTN_PLAY_PAUSE_DOWN = 0; // start/pause
+const uint8_t EVENT_BTN_NEXT_DOWN = 1; // next
+const uint8_t EVENT_BTN_PREV_DOWN = 2; // prev
+const uint8_t EVENT_SET_BPM = 3; // set BPM
+const uint8_t EVENT_BPM = 6; // bpm periodically from IMU
+const uint8_t EVENT_BTN_PLAY_PAUSE = 7; // button high/low events
+const uint8_t EVENT_BTN_PREV = 8; // button high/low events
+const uint8_t EVENT_BTN_NEXT = 9; // button high/low events
+const uint8_t EVENT_SLIDER = 10;
+const uint8_t EVENT_DIAL = 11;
 
 EventManager eventManager;
 AudioDevice audio(PIN_MP3_TX, PIN_MP3_RX, mp3a);
-// Imu2Bpm imu_2_bpm; // imu to bpm converter
+Imu2Bpm imu_2_bpm; // imu to bpm converter
 
-
-//Defines a custom structure StateMachineSingle (data type), with one state
-struct StateMachineSingle
-{
-  enum State { UNDEFINED, STATE_ONE }; //One state + an (optional) undefined state
-  int currentState = UNDEFINED; //The default is undefined
-  void (* listener)(int event, int parameter); //Function pointer that can point to our callback
-};
-typedef struct StateMachineSingle StateMachineSingle; 
-
-//Defines a custom structure StateMachineDuo (data type), with two states
-struct StateMachineDuo
-{
-  enum State { UNDEFINED, STATE_ONE, STATE_TWO }; //Two states + an (optional) undefined state
-  int currentState = UNDEFINED; //The default is undefined
-  void (* listener)(int event, int parameter); //Function pointer that can point to our callback
-};
-typedef struct StateMachineDuo StateMachineDuo; 
-
-//Defines a custom structure StateMachineDuo (data type), with three states
-struct StateMachineTrio
-{
-  enum State { UNDEFINED, STATE_ONE, STATE_TWO, STATE_THREE };
-  int currentState = UNDEFINED;
-  void (* listener)(int event, int parameter);
-};
-typedef struct StateMachineTrio StateMachineTrio;
 
 //Defines a custom structure StateMachineBtn (data type), with two states
 struct StateMachineBtn
@@ -97,29 +66,29 @@ struct ModeController
 {
   enum State { UNDEFINED, STATE_ONE, STATE_TWO }; //Two states + an (optional) undefined state
   int currentState = UNDEFINED; //The default is undefined
+  int lastDebounceTime = 0;
   int bpm = 0;
+  int slider = 0;
   void (* listener)(int event, int parameter); //Function pointer that can point to our callback
 };
 typedef struct ModeController ModeController; 
 
 //Defines a custom structure StateMachineBtn (data type), with two states
-struct PotentiometerController
+struct VolumeController
 {
   int currentValue = 0; // slider or rotary potentiometer value
   void (* listener)(int event, int parameter); //Function pointer that can point to our callback
 };
-typedef struct PotentiometerController PotentiometerController; 
+typedef struct VolumeController VolumeController; 
 
 //Create three variables representing state machines, using our custom data types.
 //Note that we are using the StateMachineTrio data type twice. (this is the benefit of the struct)
 PlayerController player; // states: [PAUSED, PLAYING]
-StateMachineSingle volume_controller; // states: [VOLUME]
 ModeController mode_controller; // states: [MANUAL_BPM, AUTO_BPM]
 StateMachineBtn play_pause_btn; // states: [UP, DOWN]
 StateMachineBtn prev_btn; // states: [UP, DOWN]
 StateMachineBtn next_btn; // states: [UP, DOWN]
-PotentiometerController slider_controller; // keep internal state of slider reading
-PotentiometerController dial_controller;
+VolumeController volume_controller;
 
 
 void setup() {
@@ -127,6 +96,7 @@ void setup() {
   Serial.readString(); //Read "away" any potentially buffered data
 
   audio.initHardware();
+  imu_2_bpm.init();
 
   // set up pins
   pinMode(PIN_BTN_PLAY_PAUSE, INPUT);
@@ -135,13 +105,11 @@ void setup() {
 
   //Point the listener function pointer to the respective callback
   player.listener = on_player_input;
-  volume_controller.listener = on_volume_input;
   mode_controller.listener = on_mode_input;
   play_pause_btn.listener = on_play_pause_btn_input;
   prev_btn.listener = on_prev_btn_input;
   next_btn.listener = on_next_btn_input;
-  slider_controller.listener = on_slider_input;
-  dial_controller.listener = on_dial_input;
+  volume_controller.listener = on_dial_input;
 
   //Map the different events to the listeners
   //Note that the toggle state machine is only listening to two events
@@ -150,53 +118,47 @@ void setup() {
   eventManager.addListener(EVENT_BTN_PREV_DOWN, player.listener); // prev
   eventManager.addListener(EVENT_SET_BPM, player.listener); // set BPM
   
-  eventManager.addListener(EVENT_DIAL_CHANGE, volume_controller.listener); // volume change
-  
-  eventManager.addListener(EVENT_SLIDER_CHANGE, mode_controller.listener); // bpm slider moved
   eventManager.addListener(EVENT_BPM, mode_controller.listener); // bpm periodically from IMU
+  eventManager.addListener(EVENT_SLIDER, mode_controller.listener);
   
   // listener for buttons, edge detector
   eventManager.addListener(EVENT_BTN_PLAY_PAUSE, play_pause_btn.listener); // button high/low from polling
   eventManager.addListener(EVENT_BTN_PREV, prev_btn.listener);
   eventManager.addListener(EVENT_BTN_NEXT, next_btn.listener);
 
-  // listener for slider, rotary potentiometer. detect value changes
-  eventManager.addListener(EVENT_SLIDER, slider_controller.listener);
-  eventManager.addListener(EVENT_DIAL, dial_controller.listener);
+  eventManager.addListener(EVENT_DIAL, volume_controller.listener);
 
   Serial.println();
   Serial.println("--------------------------------");
 
   //Initialize all state machines (Each listener will handle the UNDEFINED state in this example).
   player.listener(0, 0);
-  volume_controller.listener(0, 0);
   mode_controller.listener(0, 0);
   play_pause_btn.listener(0, 0);
   prev_btn.listener(0, 0);
   next_btn.listener(0, 0);
-  slider_controller.listener(0, 0);
-  dial_controller.listener(0, 0);
+  volume_controller.listener(0, 0);
 }
 
 void loop() {
-  
   //Handle any events that are in the queue
- eventManager.processAllEvents();
+  eventManager.processAllEvents();
 
   // poll sensors, post events
-  // TODO
   // read the state of the pushbutton value:
   int btn_play_pause = digitalRead(PIN_BTN_PLAY_PAUSE);
   int btn_prev = digitalRead(PIN_BTN_PREV);
   int btn_next = digitalRead(PIN_BTN_NEXT);
   int slider = analogRead(PIN_SLIDER);
   int dial = analogRead(PIN_DIAL);
+  int bpm = imu_2_bpm.loop();
   
   eventManager.queueEvent(EVENT_BTN_PLAY_PAUSE, btn_play_pause); 
   eventManager.queueEvent(EVENT_BTN_PREV, btn_prev); 
   eventManager.queueEvent(EVENT_BTN_NEXT, btn_next); 
   eventManager.queueEvent(EVENT_SLIDER, slider); 
   eventManager.queueEvent(EVENT_DIAL, dial); 
+  eventManager.queueEvent(EVENT_BPM, bpm); 
 }
 
 // ************************
@@ -204,14 +166,6 @@ void loop() {
 // ************************
 void on_player_input( int event, int param )
 {
-  // Serial.print("on_player_input(   ");
-  // Serial.print(event);
-  // Serial.print(", ");  
-  // Serial.print(param);
-  // Serial.print(") current state[");
-  // Serial.print(player.currentState);
-  // Serial.print("]");
-
   //choose the code block based on the current state
   // UNDEFINED -> STATE_ONE -> STATE_TWO -> STATE_ONE ...
   switch (player.currentState) {
@@ -224,7 +178,6 @@ void on_player_input( int event, int param )
     case player.STATE_ONE: // paused
       if (event == EVENT_BTN_PLAY_PAUSE_DOWN) {
         Serial.println("start playing");
-        audio.setTrack(player.track);
         audio.play();
         player.currentState = player.STATE_TWO; // toggle to playing state
       }
@@ -240,6 +193,8 @@ void on_player_input( int event, int param )
         Serial.print("set bpm while paused: ");
         Serial.println(param);
         player.track = track; // update currently played track
+        audio.setTrack(player.track);
+        audio.pause();
       }
       break;
 
@@ -283,113 +238,104 @@ void on_player_input( int event, int param )
       }
       break;
   }
-
-  // Serial.print("->[");
-  // Serial.print(player.currentState);
-  // Serial.println("]");
-}
-
-void on_volume_input( int event, int param )
-{
-  // Serial.print("on_volume_input(  ");
-  // Serial.print(event);
-  // Serial.print(", ");  
-  // Serial.print(param);
-  // Serial.print(") current state[");
-  // Serial.print(volume_controller.currentState);
-  // Serial.print("]");
-
-  //choose the code block based on the current state
-  // UNDEFINED -> STATE_ONE -> STATE_TWO -> STATE_THREE -> STATE_ONE ...
-  switch (volume_controller.currentState) {
-
-    case volume_controller.UNDEFINED:
-      // Do Intialization things
-      volume_controller.currentState = volume_controller.STATE_ONE;
-      break;
-
-    case volume_controller.STATE_ONE:
-      // stay in current state
-      int volume = param * 256.0 / 678.0 - 1.0;
-      volume = min(volume, 255);
-      volume = max(volume, 0);
-      Serial.print("setting volume: ");
-      Serial.println(volume);
-      audio.setVolume(volume);
-      break;
-  }
-
-  // Serial.print("->[");
-  // Serial.print(volume_controller.currentState);
-  // Serial.println("]");
 }
 
 void on_mode_input( int event, int param )
 {
-  // Serial.print("on_mode_input(");
-  // Serial.print(event);
-  // Serial.print(", ");  
-  // Serial.print(param);
-  // Serial.print(") current state[");
-  // Serial.print(mode_controller.currentState);
-  // Serial.print("]");
-
   //choose the code block based on the current state
   // UNDEFINED -> STATE_THREE -> STATE_TWO -> STATE_ONE -> STATE_THREE ...
   switch (mode_controller.currentState) {
 
     case mode_controller.UNDEFINED:
-      // Do Intialization things
-      // TODO: initialize based on slider position
-      mode_controller.currentState = mode_controller.STATE_ONE;
+      mode_controller.currentState = mode_controller.STATE_TWO;
       break;
 
     case mode_controller.STATE_ONE: // manual BPM
-      if (event == EVENT_SLIDER_CHANGE) {
-        // if bpm in manual range
-        //    convert to BPM
-        //    emit EVENT_SET_BPM event to player
-        if (param > 100) {
-          int bpm = (param - 100) / 120 * BPM_STEP + BPM_MIN;
-          if (bpm != mode_controller.bpm) {
-            Serial.print("setting bpm: ");
-            Serial.println(bpm);
-            eventManager.queueEvent(EVENT_SET_BPM, bpm); 
-            mode_controller.bpm = bpm;
-          }
-        }
-        // else if bpm in auto range
-        //    change to AUTO state
-        else {
-          mode_controller.currentState = mode_controller.STATE_TWO;
-        }
-      }
-      if (event == EVENT_BPM) {
-        // no-op
-      }
+      handle_manual_bpm_mode(event, param);
       break;
 
     case mode_controller.STATE_TWO: // auto BPM
-      if (event == EVENT_SLIDER_CHANGE) {
-        // TODO
-        // if bpm in manual range
-        //    change to MANUAL state
-        // else if bpm in auto range
-        //    no-op
-        mode_controller.currentState = mode_controller.STATE_ONE;
-      }
-      if (event == EVENT_BPM) {
-        // TODO
-        // read BPM from IMU arm swing
-        // emit EVENT_SET_BPM event to player
-      }
+      handle_auto_bpm_mode(event, param);
       break;
   }
-
-  // Serial.print("->[");
-  // Serial.print(mode_controller.currentState);
-  // Serial.println("]");
 }
+
+void handle_manual_bpm_mode(int event, int param) {
+  if (event == EVENT_SLIDER) {
+    // only fire change, if delta greater than 5
+    // equivalent to debouncing
+    if (param >= (mode_controller.slider + 5) || param <= (mode_controller.slider - 5)) {
+      // Serial.print("value changed: ");
+      // Serial.println(param);
+      mode_controller.slider = param;
+
+      // if bpm in manual range
+      //    convert to BPM
+      //    emit EVENT_SET_BPM event to player
+      if (param > 100) {
+        handle_manual_bpm_slider(param);
+      }
+      // else if bpm in auto range
+      //    change to AUTO state
+      else {
+        Serial.println("bpm auto mode");
+        mode_controller.currentState = mode_controller.STATE_TWO;
+      }
+    }
+  }
+  if (event == EVENT_BPM) {
+    // no-op
+  }
+}
+
+void handle_auto_bpm_mode(int event, int param) {
+  if (event == EVENT_SLIDER) {
+    if (param >= (mode_controller.slider + 5) || param <= (mode_controller.slider - 5)) {
+      // Serial.print("value changed: ");
+      // Serial.println(param);
+      mode_controller.slider = param;
+
+      // if bpm in manual range
+      //    change to MANUAL state
+      if (param > 100) {
+        handle_manual_bpm_slider(param);
+        mode_controller.currentState = mode_controller.STATE_ONE;
+      }
+      // else if bpm in auto range
+      //    no-op
+      else {
+        // no-op
+      }
+    }
+  }
+  if (event == EVENT_BPM) {
+    // read BPM from IMU arm swing. round to nearest 10's. bound by 140, 180
+    // bias toward over speeding
+    int bpm = (int((param - 7.5) / 10.0) * 10 + 10) * 2; // times two, to match conventional running BPM measure
+    bpm = max(bpm, BPM_MIN);
+    bpm = min(bpm, BPM_MAX);
+
+    // emit EVENT_SET_BPM event to player
+    if (bpm != mode_controller.bpm && 
+        millis() - mode_controller.lastDebounceTime > DEBOUNCE_BPM_DELAY) {
+      Serial.print("auto bpm: ");
+      Serial.println(bpm);
+      eventManager.queueEvent(EVENT_SET_BPM, bpm);
+      mode_controller.bpm = bpm;
+      mode_controller.lastDebounceTime = millis();
+    }
+  }
+}
+
+void handle_manual_bpm_slider(int param) {
+  int bpm = (param - 100) / 148 * BPM_STEP + BPM_MIN;
+  if (bpm != mode_controller.bpm) {
+    Serial.print("setting bpm: ");
+    Serial.println(bpm);
+    eventManager.queueEvent(EVENT_SET_BPM, bpm); 
+    mode_controller.bpm = bpm;
+  }
+} 
 
 void on_play_pause_btn_input( int event, int param ) {
   // debounce
@@ -478,24 +424,20 @@ void on_next_btn_input( int event, int param ) {
   next_btn.lastDebounceTime = millis();
 }
 
-void on_slider_input(int event, int param) {
-  // only fire change, if delta greater than 5
-  // equivalent to debouncing
-  if (param >= (slider_controller.currentValue + 5) || param <= (slider_controller.currentValue - 5)) {
-    // Serial.print("value changed: ");
-    // Serial.println(param);
-    slider_controller.currentValue = param;
-    eventManager.queueEvent(EVENT_SLIDER_CHANGE, param); 
-  }
-}
-
 void on_dial_input(int event, int param) {
   // only fire change, if delta greater than 5
   // equivalent to debouncing
-  if (param >= (dial_controller.currentValue + 5) || param <= (dial_controller.currentValue - 5)) {
+  if (param >= (volume_controller.currentValue + 10) || param <= (volume_controller.currentValue - 10)) {
     // Serial.print("value changed: ");
     // Serial.println(param);
-    dial_controller.currentValue = param;
-    eventManager.queueEvent(EVENT_DIAL_CHANGE, param); 
+    volume_controller.currentValue = param;
+    
+    // set volume
+    int volume = param * 256.0 / 678.0 - 1.0;
+    volume = min(volume, 255);
+    volume = max(volume, 0);
+    Serial.print("setting volume: ");
+    Serial.println(volume);
+    audio.setVolume(volume);
   }
 }
