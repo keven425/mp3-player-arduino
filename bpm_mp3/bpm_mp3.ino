@@ -9,7 +9,7 @@
 #include "Imu2Bpm.h"
 
 // constants
-const uint16_t DEBOUNCE_DELAY = 50; // 50 millisec
+const uint16_t DEBOUNCE_DELAY = 10; // 50 millisec
 const uint16_t BPM_MIN = 120;
 const uint16_t BPM_MAX = 180;
 const uint16_t BPM_STEP = 20;
@@ -69,6 +69,7 @@ struct ModeController
   int lastDebounceTime = 0;
   int bpm = 0;
   int slider = 0;
+  float bpm_avg = 0.0;
   void (* listener)(int event, int parameter); //Function pointer that can point to our callback
 };
 typedef struct ModeController ModeController; 
@@ -309,9 +310,14 @@ void handle_auto_bpm_mode(int event, int param) {
     }
   }
   if (event == EVENT_BPM) {
+    // calculate moving average from IMU bpm
+    float weight = 0.95;
+    mode_controller.bpm_avg = mode_controller.bpm_avg * weight + param * (1.0 - weight);
+    
     // read BPM from IMU arm swing. round to nearest 10's. bound by 140, 180
     // bias toward over speeding
-    int bpm = (int((param - 7.5) / 10.0) * 10 + 10) * 2; // times two, to match conventional running BPM measure
+    int bpm = (int((mode_controller.bpm_avg - 7.5) / 10.0) * 10 + 10);
+    bpm *= 2; // times two, to match conventional running BPM measure
     bpm = max(bpm, BPM_MIN);
     bpm = min(bpm, BPM_MAX);
 
